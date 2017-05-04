@@ -288,27 +288,33 @@ namespace PandoraImager
         {
             this.Text = "PandoraImager";
             lvImages.Items.Clear();
+            tabControl.SelectedIndex = 0;
+            tabControl.Visible = false;
             lvImages.Enabled = false;
             cbSave.Enabled = false;
             cbSaveAs.Enabled = false;
-            tsddImage.Enabled = false;
+            tsddImage.Visible = false;
         }
 
         private void SetFileLoaded()
         {
             this.Text = string.Format("PandoraImager - {0}", fileName);
+            tabControl.Visible = true;
+            tabControl.SelectedIndex = 0;
             lvImages.Enabled = true;
             cbSave.Enabled = true;
             cbSaveAs.Enabled = true;
+            tsddImage.Visible = true;
             RefreshMenus();
-            RefreshList();
+            RefreshImagesList();
+            RefreshBootloaderList();
         }
 
         private void RefreshMenus()
         {
             if (tabControl.SelectedTab == tabImages)
             {
-                tsddImage.Enabled = true;
+                tsddImage.Visible = true;
                 if (lvImages.SelectedItems.Count == 1)
                 {
                     int index = lvImages.SelectedIndices[0];
@@ -320,7 +326,7 @@ namespace PandoraImager
                         cbImageRename.Enabled = (ListToID[index] != 0);
                         cbImageImport.Enabled = true;
                         cbImageExport.Enabled = true;
-                        tsmiImageChangeType.Enabled = (ListToID[index] != 0);
+                        tsmiImageChange.Enabled = (ListToID[index] != 0);
                         cbImageUp.Enabled = (ListToID[index] != 0 && index > 0);
                         cbImageDown.Enabled = (ListToID[index] != 0 && index + 1 < ListToID.Count);
                     }
@@ -331,7 +337,7 @@ namespace PandoraImager
                         cbImageRename.Enabled = false;
                         cbImageImport.Enabled = false;
                         cbImageExport.Enabled = false;
-                        tsmiImageChangeType.Enabled = false;
+                        tsmiImageChange.Enabled = false;
                         cbImageUp.Enabled = false;
                         cbImageDown.Enabled = false;
                     }
@@ -343,34 +349,57 @@ namespace PandoraImager
                     cbImageRename.Enabled = false;
                     cbImageImport.Enabled = false;
                     cbImageExport.Enabled = false;
-                    tsmiImageChangeType.Enabled = false;
+                    tsmiImageChange.Enabled = false;
                     cbImageUp.Enabled = false;
                     cbImageDown.Enabled = false;
                 }
             }
             else
             {
-                tsddImage.Enabled = false;
+                tsddImage.Visible = false;
             }
         }
 
-        private void RefreshList()
+        private void RefreshBootloaderList()
+        {
+            ndExecAddr.Value = image.Header.ExecuteAddress;
+            ndDQSODS.Value = image.Header.DQSODS;
+            ndCLKQSDS.Value = image.Header.CLKQSDS;
+            ndDRAMSize.Value = image.Header.DramSize;
+        }
+
+        private void RefreshImagesList()
         {
             lvImages.Items.Clear();
             ListToID.Clear();
 
             int item = 0;
-            foreach (ImageEntry entry in image.GetImages())
+            foreach (ImageEntry entry in image.Images)
             {
                 string[] subItems = new string[lvImages.Columns.Count < 6 ? 6 : lvImages.Columns.Count];
-                subItems[0] = entry.ImageID.ToString();
-                subItems[1] = entry.Name.ToString();
-                subItems[2] = entry.ImageType.ToString();
-                subItems[3] = entry.StartBlock.ToString();
-                subItems[4] = (entry.EndBlock - entry.StartBlock).ToString();
-                subItems[5] = string.Format("0x{0}", entry.FileSize.ToString("X4"));
+                subItems[0] = "";
+                subItems[1] = entry.ImageID.ToString();
+                subItems[2] = entry.Name.ToString();
+                subItems[3] = entry.ImageType.ToString();
+                subItems[4] = entry.StartBlock.ToString();
+                subItems[5] = (entry.EndBlock - entry.StartBlock).ToString();
+                subItems[6] = string.Format("0x{0}", entry.FileSize.ToString("X4"));
 
-                lvImages.Items.Add(new ListViewItem(subItems, 0));
+                int icon = 0;
+                switch (entry.ImageType)
+                {
+                    case ImageType.System:
+                        icon = 1;
+                    break;
+                    case ImageType.Execute:
+                        icon = 2;
+                    break;
+                    case ImageType.Logo:
+                        icon = 3;
+                    break;
+                }
+
+                lvImages.Items.Add(new ListViewItem(subItems, icon));
                 ListToID.Add(item, entry.ImageID);
 
                 item++;
@@ -456,6 +485,221 @@ namespace PandoraImager
 
             MessageBox.Show("Image file successfully written!", "Success!",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void cbImageExport_Click(object sender, EventArgs e)
+        {
+            if (lvImages.SelectedIndices.Count != 1)
+                return;
+            if (!ListToID.ContainsKey(lvImages.SelectedIndices[0]))
+                return;
+            
+            try
+            {
+                ImageEntry img;
+                if (!image.GetImage(ListToID[lvImages.SelectedIndices[0]], out img))
+                    return;
+
+                SaveFileDialog sfd = new SaveFileDialog();
+                sfd.FileName = string.Format("{0}.bin", img.Name.Trim());
+                sfd.Filter = "Raw data files (*.bin)|*.bin|All files (*.*)|*.*";
+                sfd.FilterIndex = 0;
+                sfd.Title = "Export data segment";
+                sfd.OverwritePrompt = true;
+
+                if (sfd.ShowDialog() != DialogResult.OK)
+                    return;
+
+                File.WriteAllBytes(sfd.FileName, img.Data);
+            }
+            catch (Exception ex)
+            {
+                ExceptionBox(ex);
+                return;
+            }
+
+            MessageBox.Show("Raw data file successfully exported!", "Success!",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void cbImageUp_Click(object sender, EventArgs e)
+        {
+            if (lvImages.SelectedItems.Count != 1)
+                return;
+
+            try
+            {
+                int selectedIndex = lvImages.SelectedIndices[0];
+                if (!ListToID.ContainsKey(lvImages.SelectedIndices[0]))
+                    return;
+
+                ushort selectedId = ListToID[selectedIndex];
+                if (selectedId == 0 || selectedIndex == 0)
+                    return;
+
+                if (!ListToID.ContainsKey(selectedIndex - 1))
+                    return;
+
+                ImageEntry selectedImg, aboveImg;
+                if (!image.GetImage(selectedId, out selectedImg) ||
+                    !image.GetImage((ushort)(selectedId - 1), out aboveImg))
+                    return;
+
+                selectedImg.ImageID = aboveImg.ImageID;
+                aboveImg.ImageID = selectedId;
+
+                if (!image.ReplaceImage(selectedImg) || !image.ReplaceImage(aboveImg))
+                    return;
+
+                image.Reorder();
+                RefreshImagesList();
+            }
+            catch (Exception ex)
+            {
+                ExceptionBox(ex);
+            }
+        }
+
+        private void cbImageDown_Click(object sender, EventArgs e)
+        {
+            if (lvImages.SelectedItems.Count != 1)
+                return;
+
+            try
+            {
+                int selectedIndex = lvImages.SelectedIndices[0];
+                if (!ListToID.ContainsKey(lvImages.SelectedIndices[0]))
+                    return;
+
+                ushort selectedId = ListToID[selectedIndex];
+                if (selectedId == 0 || selectedIndex + 1 >= ListToID.Count)
+                    return;
+
+                if (!ListToID.ContainsKey(selectedIndex + 1))
+                    return;
+
+                ImageEntry selectedImg, belowImg;
+                if (!image.GetImage(selectedId, out selectedImg) ||
+                    !image.GetImage((ushort)(selectedId + 1), out belowImg))
+                    return;
+
+                selectedImg.ImageID = belowImg.ImageID;
+                belowImg.ImageID = selectedId;
+
+                if (!image.ReplaceImage(selectedImg) || !image.ReplaceImage(belowImg))
+                    return;
+
+                image.Reorder();
+                RefreshImagesList();
+            }
+            catch (Exception ex)
+            {
+                ExceptionBox(ex);
+            }
+        }
+
+        private void cbImageAdd_Click(object sender, EventArgs e)
+        {
+            if (lvImages.SelectedItems.Count != 0)
+                return;
+            if(!ListToID.ContainsKey(ListToID.Count - 1))
+                    return;
+
+            try
+            {
+                ushort lastId = ListToID[ListToID.Count - 1];
+
+                ImageEntry newImg, lastImg;
+                if (image.ImageExists((ushort)(lastId + 1)))
+                    return;
+                if (!image.GetImage(lastId, out lastImg))
+                    return;
+
+                OpenFileDialog ofd = new OpenFileDialog();
+                ofd.FileName = "";
+                ofd.Multiselect = false;
+                ofd.Filter = "Raw data files (*.bin)|*.bin|All files (*.*)|*.*";
+                ofd.FilterIndex = 0;
+                ofd.Title = "Import data segment";
+                ofd.CheckFileExists = true;
+
+                if (ofd.ShowDialog() != DialogResult.OK)
+                    return;
+
+                if (!File.Exists(ofd.FileName))
+                {
+                    MessageBox.Show("File not found!", "An error occured!",
+                        MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    return;
+                }
+
+                FileStream imgStream = File.OpenRead(ofd.FileName);
+                imgStream.Seek(0, SeekOrigin.End);
+
+                if (imgStream.Position > (NandImage.NandSize - image.CalculateUsage()))
+                {
+                    MessageBox.Show("The supplied data segment is too large!",
+                        "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    imgStream.Close();
+                    return;
+                }
+
+                uint imgSize = (uint)imgStream.Position;
+                string imgName = Path.GetFileNameWithoutExtension(ofd.FileName).Trim();
+                if (imgName.Length > 30)
+                    imgName = imgName.Substring(0, 30);
+                imgStream.Seek(0, SeekOrigin.Begin);
+                byte[] imgData = new byte[imgSize];
+                imgStream.Read(imgData, 0, (int)imgSize);
+                imgStream.Close();
+
+                newImg = new ImageEntry((ushort)(lastImg.ImageID + 1), ImageType.Execute,
+                    (ushort)(lastImg.EndBlock + 1), 0, imgName, imgData);
+
+                if (!image.AddImage(newImg))
+                {
+                    MessageBox.Show("The supplied data segment is invalid!",
+                        "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    return;
+                }
+
+                image.Reorder();
+                RefreshImagesList();
+            }
+            catch (Exception ex)
+            {
+                ExceptionBox(ex);
+            }
+        }
+
+        private void cbImageRemove_Click(object sender, EventArgs e)
+        {
+            if (lvImages.SelectedItems.Count != 1)
+                return;
+            if (!ListToID.ContainsKey(lvImages.SelectedIndices[0]))
+                return;
+
+            int index = lvImages.SelectedIndices[0];
+            ushort id = ListToID[index];
+
+            cbImageRemove.Enabled = (ListToID[index] != 0);
+            cbImageRename.Enabled = (ListToID[index] != 0);
+            cbImageImport.Enabled = true;
+            cbImageExport.Enabled = true;
+            tsmiImageChange.Enabled = (ListToID[index] != 0);
+            cbImageUp.Enabled = (ListToID[index] != 0 && index > 0);
+            cbImageDown.Enabled = (ListToID[index] != 0 && index + 1 < ListToID.Count);
+
+        }
+
+        private void cbImageRename_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void cbImageImport_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }

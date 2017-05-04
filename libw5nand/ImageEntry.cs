@@ -28,5 +28,24 @@ namespace libnvtnand
             this.Name = Name;
             this.Data = null;
         }
+
+        public ImageEntry(ushort ImageID, ImageType ImageType, ushort StartBlock, uint ExecuteAddress,
+            string Name, byte[] Data)
+        {
+            this.ImageID = ImageID;
+            this.ImageType = ImageType;
+            this.StartBlock = StartBlock;
+            this.ExecuteAddress = ExecuteAddress;
+            this.FileSize = (uint)Data.Length;
+            this.Name = Name;
+            this.Data = Data;
+
+            if (FileSize % NandImage.BytesPerBlock > 0)
+                this.EndBlock = (ushort)(((FileSize - (FileSize % NandImage.BytesPerBlock))
+                    / NandImage.BytesPerBlock) + 1);
+            else
+                this.EndBlock = (ushort)(FileSize / NandImage.BytesPerBlock);
+            this.EndBlock += this.StartBlock;
+        }
     }
 }

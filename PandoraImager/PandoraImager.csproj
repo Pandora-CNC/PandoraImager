@@ -121,6 +121,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="flash-icon.ico" />
+    <None Include="Resources\warning.png" />
     <None Include="Resources\rename.png" />
     <None Include="Resources\down.png" />
     <None Include="Resources\up.png" />

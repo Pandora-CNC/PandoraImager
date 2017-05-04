@@ -9,7 +9,7 @@ namespace libnvtnand
     public class NandImage
     {
         public BootHeader Header;
-        private List<ImageEntry> Images;
+        public List<ImageEntry> Images;
 
         public const uint BytesPerBlock = 0x20000;
         public const uint NandSize = 0x800000;
@@ -36,11 +36,6 @@ namespace libnvtnand
 
             Entry = new ImageEntry();
             return false;
-        }
-
-        public List<ImageEntry> GetImages()
-        {
-            return Images;
         }
 
         public bool AddImage(ImageEntry Entry)
@@ -246,6 +241,11 @@ namespace libnvtnand
             }
 
             return true;
+        }
+
+        public void Reorder()
+        {
+            Images = Images.OrderBy(o => o.ImageID).ToList();
         }
 
         public bool ReadImage(Stream ImageStream)
