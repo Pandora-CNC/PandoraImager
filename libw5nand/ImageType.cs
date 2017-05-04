@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace libnvtnand
+namespace libw5nand
 {
     public enum ImageType : ushort
     {

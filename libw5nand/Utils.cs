@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.IO;
 
-namespace libnvtnand
+namespace libw5nand
 {
     public static class Utils
     {

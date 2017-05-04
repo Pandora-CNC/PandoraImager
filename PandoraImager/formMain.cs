@@ -6,7 +6,7 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
-using libnvtnand;
+using libw5nand;
 using System.IO;
 
 namespace PandoraImager
@@ -17,7 +17,6 @@ namespace PandoraImager
         string fileName = "";
         FileStream stream = null;
         bool imageModified = false;
-        Dictionary<int, ushort> ListToID = new Dictionary<int, ushort>();
 
         public formMain()
         {
@@ -186,21 +185,23 @@ namespace PandoraImager
                     romName = romName.Substring(0, 30);
                 romStream.Seek(0, SeekOrigin.Begin);
                 image = new NandImage();
-                ImageEntry nandLoader = new ImageEntry(0, ImageType.System, 0, 3, 0, romSize + 0x20,
-                    romName);
-                nandLoader.Data = new byte[romSize];
+                ImageEntry nandLoader = new ImageEntry(romName, ImageType.System, 0,
+                    new byte[romSize]);
                 romStream.Read(nandLoader.Data, 0, (int)romSize);
                 romStream.Close();
 
-                if (!image.AddImage(nandLoader))
+                if (!image.CheckAddEntry(nandLoader))
                 {
-                    MessageBox.Show("The supplied NANDLoader ROM invalid!",
+                    MessageBox.Show("Error generating the image!",
                         "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                     image = null;
                     stream = null;
                     SetNoFileLoaded();
                     return;
                 }
+
+                // Add the image
+                image.Images.Add(nandLoader);
 
                 // Initalize the boot header
                 image.Header = new BootHeader();
@@ -317,39 +318,22 @@ namespace PandoraImager
                 tsddImage.Visible = true;
                 if (lvImages.SelectedItems.Count == 1)
                 {
-                    int index = lvImages.SelectedIndices[0];
-
-                    if (ListToID.ContainsKey(index))
-                    {
-                        cbImageAdd.Enabled = false;
-                        cbImageRemove.Enabled = (ListToID[index] != 0);
-                        cbImageRename.Enabled = (ListToID[index] != 0);
-                        cbImageImport.Enabled = true;
-                        cbImageExport.Enabled = true;
-                        tsmiImageChange.Enabled = (ListToID[index] != 0);
-                        cbImageUp.Enabled = (ListToID[index] != 0 && index > 0);
-                        cbImageDown.Enabled = (ListToID[index] != 0 && index + 1 < ListToID.Count);
-                    }
-                    else
-                    {
-                        cbImageAdd.Enabled = false;
-                        cbImageRemove.Enabled = false;
-                        cbImageRename.Enabled = false;
-                        cbImageImport.Enabled = false;
-                        cbImageExport.Enabled = false;
-                        tsmiImageChange.Enabled = false;
-                        cbImageUp.Enabled = false;
-                        cbImageDown.Enabled = false;
-                    }
+                    int imageId = lvImages.SelectedIndices[0];
+                    cbImageAdd.Enabled = false;
+                    cbImageRemove.Enabled = (imageId != 0);
+                    cbImageImport.Enabled = true;
+                    cbImageExport.Enabled = true;
+                    cbModify.Enabled = true;
+                    cbImageUp.Enabled = (imageId > 1);
+                    cbImageDown.Enabled = (imageId != 0 && imageId + 1 < image.ImageCount);
                 }
                 else
                 {
                     cbImageAdd.Enabled = true;
                     cbImageRemove.Enabled = false;
-                    cbImageRename.Enabled = false;
                     cbImageImport.Enabled = false;
                     cbImageExport.Enabled = false;
-                    tsmiImageChange.Enabled = false;
+                    cbModify.Enabled = false;
                     cbImageUp.Enabled = false;
                     cbImageDown.Enabled = false;
                 }
@@ -371,22 +355,22 @@ namespace PandoraImager
         private void RefreshImagesList()
         {
             lvImages.Items.Clear();
-            ListToID.Clear();
 
-            int item = 0;
+            int imageId = 0;
             foreach (ImageEntry entry in image.Images)
             {
-                string[] subItems = new string[lvImages.Columns.Count < 6 ? 6 : lvImages.Columns.Count];
+                string[] subItems = new string[(lvImages.Columns.Count < 7)
+                    ? 7 : lvImages.Columns.Count];
                 subItems[0] = "";
-                subItems[1] = entry.ImageID.ToString();
+                subItems[1] = imageId.ToString();
                 subItems[2] = entry.Name.ToString();
-                subItems[3] = entry.ImageType.ToString();
-                subItems[4] = entry.StartBlock.ToString();
-                subItems[5] = (entry.EndBlock - entry.StartBlock).ToString();
-                subItems[6] = string.Format("0x{0}", entry.FileSize.ToString("X4"));
+                subItems[3] = entry.Type.ToString();
+                subItems[4] = NandImage.CalculateBlocks(entry.Data.Length).ToString();
+                subItems[5] = string.Format("0x{0}", entry.Data.Length.ToString("X"));
+                subItems[6] = string.Format("0x{0}", entry.ExecAddr.ToString("X08"));
 
                 int icon = 0;
-                switch (entry.ImageType)
+                switch (entry.Type)
                 {
                     case ImageType.System:
                         icon = 1;
@@ -400,9 +384,8 @@ namespace PandoraImager
                 }
 
                 lvImages.Items.Add(new ListViewItem(subItems, icon));
-                ListToID.Add(item, entry.ImageID);
 
-                item++;
+                imageId++;
             }
         }
 
@@ -491,14 +474,12 @@ namespace PandoraImager
         {
             if (lvImages.SelectedIndices.Count != 1)
                 return;
-            if (!ListToID.ContainsKey(lvImages.SelectedIndices[0]))
+            if (lvImages.SelectedIndices[0] >= image.ImageCount)
                 return;
             
             try
             {
-                ImageEntry img;
-                if (!image.GetImage(ListToID[lvImages.SelectedIndices[0]], out img))
-                    return;
+                ImageEntry img = image.Images[lvImages.SelectedIndices[0]];
 
                 SaveFileDialog sfd = new SaveFileDialog();
                 sfd.FileName = string.Format("{0}.bin", img.Name.Trim());
@@ -526,32 +507,20 @@ namespace PandoraImager
         {
             if (lvImages.SelectedItems.Count != 1)
                 return;
+            if (lvImages.SelectedIndices[0] >= image.ImageCount
+                || lvImages.SelectedIndices[0] == 0)
+                return;
 
             try
             {
-                int selectedIndex = lvImages.SelectedIndices[0];
-                if (!ListToID.ContainsKey(lvImages.SelectedIndices[0]))
+                if (!image.MoveImageUp(lvImages.SelectedIndices[0]))
+                {
+                    MessageBox.Show("Moving the image failed!", "An error occured!",
+                        MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                     return;
+                }
 
-                ushort selectedId = ListToID[selectedIndex];
-                if (selectedId == 0 || selectedIndex == 0)
-                    return;
-
-                if (!ListToID.ContainsKey(selectedIndex - 1))
-                    return;
-
-                ImageEntry selectedImg, aboveImg;
-                if (!image.GetImage(selectedId, out selectedImg) ||
-                    !image.GetImage((ushort)(selectedId - 1), out aboveImg))
-                    return;
-
-                selectedImg.ImageID = aboveImg.ImageID;
-                aboveImg.ImageID = selectedId;
-
-                if (!image.ReplaceImage(selectedImg) || !image.ReplaceImage(aboveImg))
-                    return;
-
-                image.Reorder();
+                imageModified = true;
                 RefreshImagesList();
             }
             catch (Exception ex)
@@ -564,32 +533,20 @@ namespace PandoraImager
         {
             if (lvImages.SelectedItems.Count != 1)
                 return;
+            if (lvImages.SelectedIndices[0] + 1 >= image.ImageCount
+                || lvImages.SelectedIndices[0] == 0)
+                return;
 
             try
             {
-                int selectedIndex = lvImages.SelectedIndices[0];
-                if (!ListToID.ContainsKey(lvImages.SelectedIndices[0]))
+                if (!image.MoveImageDown(lvImages.SelectedIndices[0]))
+                {
+                    MessageBox.Show("Moving the image failed!", "An error occured!",
+                        MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                     return;
+                }
 
-                ushort selectedId = ListToID[selectedIndex];
-                if (selectedId == 0 || selectedIndex + 1 >= ListToID.Count)
-                    return;
-
-                if (!ListToID.ContainsKey(selectedIndex + 1))
-                    return;
-
-                ImageEntry selectedImg, belowImg;
-                if (!image.GetImage(selectedId, out selectedImg) ||
-                    !image.GetImage((ushort)(selectedId + 1), out belowImg))
-                    return;
-
-                selectedImg.ImageID = belowImg.ImageID;
-                belowImg.ImageID = selectedId;
-
-                if (!image.ReplaceImage(selectedImg) || !image.ReplaceImage(belowImg))
-                    return;
-
-                image.Reorder();
+                imageModified = true;
                 RefreshImagesList();
             }
             catch (Exception ex)
@@ -602,19 +559,9 @@ namespace PandoraImager
         {
             if (lvImages.SelectedItems.Count != 0)
                 return;
-            if(!ListToID.ContainsKey(ListToID.Count - 1))
-                    return;
 
             try
             {
-                ushort lastId = ListToID[ListToID.Count - 1];
-
-                ImageEntry newImg, lastImg;
-                if (image.ImageExists((ushort)(lastId + 1)))
-                    return;
-                if (!image.GetImage(lastId, out lastImg))
-                    return;
-
                 OpenFileDialog ofd = new OpenFileDialog();
                 ofd.FileName = "";
                 ofd.Multiselect = false;
@@ -653,17 +600,24 @@ namespace PandoraImager
                 imgStream.Read(imgData, 0, (int)imgSize);
                 imgStream.Close();
 
-                newImg = new ImageEntry((ushort)(lastImg.ImageID + 1), ImageType.Execute,
-                    (ushort)(lastImg.EndBlock + 1), 0, imgName, imgData);
+                formSegment fseg = new formSegment(new ImageHeader()
+                    {ImageName = imgName, ImageType = libw5nand.ImageType.Execute}, false);
+                if (fseg.ShowDialog() != DialogResult.OK)
+                    return;
 
-                if (!image.AddImage(newImg))
+                ImageEntry newImg = new ImageEntry(fseg.Header.ImageName, fseg.Header.ImageType,
+                    fseg.Header.ExecuteAddress, imgData);
+                    
+                if (!image.CheckAddEntry(newImg))
                 {
-                    MessageBox.Show("The supplied data segment is invalid!",
+                    MessageBox.Show("The configured data segment is invalid!",
                         "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                     return;
                 }
 
-                image.Reorder();
+                image.Images.Add(newImg);
+
+                imageModified = true;
                 RefreshImagesList();
             }
             catch (Exception ex)
@@ -676,28 +630,28 @@ namespace PandoraImager
         {
             if (lvImages.SelectedItems.Count != 1)
                 return;
-            if (!ListToID.ContainsKey(lvImages.SelectedIndices[0]))
+            if (lvImages.SelectedIndices[0] >= image.ImageCount
+                || lvImages.SelectedIndices[0] == 0)
                 return;
 
-            int index = lvImages.SelectedIndices[0];
-            ushort id = ListToID[index];
-
-            cbImageRemove.Enabled = (ListToID[index] != 0);
-            cbImageRename.Enabled = (ListToID[index] != 0);
-            cbImageImport.Enabled = true;
-            cbImageExport.Enabled = true;
-            tsmiImageChange.Enabled = (ListToID[index] != 0);
-            cbImageUp.Enabled = (ListToID[index] != 0 && index > 0);
-            cbImageDown.Enabled = (ListToID[index] != 0 && index + 1 < ListToID.Count);
-
+            try
+            {
+                image.Images.RemoveAt(lvImages.SelectedIndices[0]);
+                imageModified = true;
+                RefreshImagesList();
+            }
+            catch (Exception ex)
+            {
+                ExceptionBox(ex);
+            }
         }
 
-        private void cbImageRename_Click(object sender, EventArgs e)
+        private void cbImageImport_Click(object sender, EventArgs e)
         {
 
         }
 
-        private void cbImageImport_Click(object sender, EventArgs e)
+        private void cbModify_Click(object sender, EventArgs e)
         {
 
         }

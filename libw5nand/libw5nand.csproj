@@ -45,6 +45,7 @@
     <Compile Include="ImageType.cs" />
     <Compile Include="NandImage.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ImageHeader.cs" />
     <Compile Include="Utils.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

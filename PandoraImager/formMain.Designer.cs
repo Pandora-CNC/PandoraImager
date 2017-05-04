@@ -41,16 +41,10 @@
             this.cbImageAdd = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator2 = new System.Windows.Forms.ToolStripSeparator();
             this.cbImageRemove = new System.Windows.Forms.ToolStripMenuItem();
-            this.cbImageRename = new System.Windows.Forms.ToolStripMenuItem();
+            this.cbModify = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator5 = new System.Windows.Forms.ToolStripSeparator();
             this.cbImageImport = new System.Windows.Forms.ToolStripMenuItem();
             this.cbImageExport = new System.Windows.Forms.ToolStripMenuItem();
-            this.tsmiImageChange = new System.Windows.Forms.ToolStripMenuItem();
-            this.cbImageChExec = new System.Windows.Forms.ToolStripMenuItem();
-            this.cbImageChSystem = new System.Windows.Forms.ToolStripMenuItem();
-            this.cbImageChLogo = new System.Windows.Forms.ToolStripMenuItem();
-            this.cbImageChData = new System.Windows.Forms.ToolStripMenuItem();
-            this.cbImageChRofs = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator4 = new System.Windows.Forms.ToolStripSeparator();
             this.cbImageUp = new System.Windows.Forms.ToolStripMenuItem();
             this.cbImageDown = new System.Windows.Forms.ToolStripMenuItem();
@@ -65,9 +59,9 @@
             this.chID = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.chName = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.chType = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
-            this.chOffset = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.chBlocks = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.chBytes = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            this.chExecAddr = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.ilIcons = new System.Windows.Forms.ImageList(this.components);
             this.tabBootloader = new System.Windows.Forms.TabPage();
             this.tableLayoutPanel1 = new System.Windows.Forms.TableLayoutPanel();
@@ -101,7 +95,7 @@
             this.tsddUtility});
             this.toolStrip.Location = new System.Drawing.Point(0, 0);
             this.toolStrip.Name = "toolStrip";
-            this.toolStrip.Size = new System.Drawing.Size(584, 25);
+            this.toolStrip.Size = new System.Drawing.Size(504, 25);
             this.toolStrip.TabIndex = 0;
             this.toolStrip.Text = "toolStrip1";
             // 
@@ -166,11 +160,10 @@
             this.cbImageAdd,
             this.toolStripSeparator2,
             this.cbImageRemove,
-            this.cbImageRename,
+            this.cbModify,
             this.toolStripSeparator5,
             this.cbImageImport,
             this.cbImageExport,
-            this.tsmiImageChange,
             this.toolStripSeparator4,
             this.cbImageUp,
             this.cbImageDown});
@@ -201,13 +194,14 @@
             this.cbImageRemove.Text = "&Remove";
             this.cbImageRemove.Click += new System.EventHandler(this.cbImageRemove_Click);
             // 
-            // cbImageRename
+            // cbModify
             // 
-            this.cbImageRename.Image = global::PandoraImager.Properties.Resources.rename;
-            this.cbImageRename.Name = "cbImageRename";
-            this.cbImageRename.Size = new System.Drawing.Size(152, 22);
-            this.cbImageRename.Text = "Re&name";
-            this.cbImageRename.Click += new System.EventHandler(this.cbImageRename_Click);
+            this.cbModify.Image = global::PandoraImager.Properties.Resources.modify;
+            this.cbModify.Name = "cbModify";
+            this.cbModify.Size = new System.Drawing.Size(152, 22);
+            this.cbModify.Text = "&Modify";
+            this.cbModify.Visible = false;
+            this.cbModify.Click += new System.EventHandler(this.cbModify_Click);
             // 
             // toolStripSeparator5
             // 
@@ -219,7 +213,8 @@
             this.cbImageImport.Image = global::PandoraImager.Properties.Resources.open;
             this.cbImageImport.Name = "cbImageImport";
             this.cbImageImport.Size = new System.Drawing.Size(152, 22);
-            this.cbImageImport.Text = "&Import";
+            this.cbImageImport.Text = "Re&place data";
+            this.cbImageImport.Visible = false;
             this.cbImageImport.Click += new System.EventHandler(this.cbImageImport_Click);
             // 
             // cbImageExport
@@ -227,53 +222,8 @@
             this.cbImageExport.Image = global::PandoraImager.Properties.Resources.save_as;
             this.cbImageExport.Name = "cbImageExport";
             this.cbImageExport.Size = new System.Drawing.Size(152, 22);
-            this.cbImageExport.Text = "E&xport";
+            this.cbImageExport.Text = "E&xport data";
             this.cbImageExport.Click += new System.EventHandler(this.cbImageExport_Click);
-            // 
-            // tsmiImageChange
-            // 
-            this.tsmiImageChange.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.cbImageChExec,
-            this.cbImageChSystem,
-            this.cbImageChLogo,
-            this.cbImageChData,
-            this.cbImageChRofs});
-            this.tsmiImageChange.Image = global::PandoraImager.Properties.Resources.modify;
-            this.tsmiImageChange.Name = "tsmiImageChange";
-            this.tsmiImageChange.Size = new System.Drawing.Size(152, 22);
-            this.tsmiImageChange.Text = "&Change type";
-            // 
-            // cbImageChExec
-            // 
-            this.cbImageChExec.Name = "cbImageChExec";
-            this.cbImageChExec.Size = new System.Drawing.Size(152, 22);
-            this.cbImageChExec.Text = "E&xecutable";
-            // 
-            // cbImageChSystem
-            // 
-            this.cbImageChSystem.Name = "cbImageChSystem";
-            this.cbImageChSystem.Size = new System.Drawing.Size(152, 22);
-            this.cbImageChSystem.Text = "&System";
-            // 
-            // cbImageChLogo
-            // 
-            this.cbImageChLogo.Name = "cbImageChLogo";
-            this.cbImageChLogo.Size = new System.Drawing.Size(152, 22);
-            this.cbImageChLogo.Text = "&Logo";
-            // 
-            // cbImageChData
-            // 
-            this.cbImageChData.Enabled = false;
-            this.cbImageChData.Name = "cbImageChData";
-            this.cbImageChData.Size = new System.Drawing.Size(152, 22);
-            this.cbImageChData.Text = "&Data";
-            // 
-            // cbImageChRofs
-            // 
-            this.cbImageChRofs.Enabled = false;
-            this.cbImageChRofs.Name = "cbImageChRofs";
-            this.cbImageChRofs.Size = new System.Drawing.Size(152, 22);
-            this.cbImageChRofs.Text = "&ROFS";
             // 
             // toolStripSeparator4
             // 
@@ -339,7 +289,7 @@
             this.tabControl.Location = new System.Drawing.Point(0, 25);
             this.tabControl.Name = "tabControl";
             this.tabControl.SelectedIndex = 0;
-            this.tabControl.Size = new System.Drawing.Size(584, 356);
+            this.tabControl.Size = new System.Drawing.Size(504, 316);
             this.tabControl.TabIndex = 1;
             this.tabControl.SelectedIndexChanged += new System.EventHandler(this.tabControl_SelectedIndexChanged);
             // 
@@ -349,7 +299,7 @@
             this.tabImages.Location = new System.Drawing.Point(4, 22);
             this.tabImages.Name = "tabImages";
             this.tabImages.Padding = new System.Windows.Forms.Padding(3);
-            this.tabImages.Size = new System.Drawing.Size(576, 330);
+            this.tabImages.Size = new System.Drawing.Size(496, 290);
             this.tabImages.TabIndex = 0;
             this.tabImages.Text = "Images";
             this.tabImages.UseVisualStyleBackColor = true;
@@ -361,9 +311,9 @@
             this.chID,
             this.chName,
             this.chType,
-            this.chOffset,
             this.chBlocks,
-            this.chBytes});
+            this.chBytes,
+            this.chExecAddr});
             this.lvImages.Dock = System.Windows.Forms.DockStyle.Fill;
             this.lvImages.FullRowSelect = true;
             this.lvImages.GridLines = true;
@@ -371,7 +321,7 @@
             this.lvImages.Location = new System.Drawing.Point(3, 3);
             this.lvImages.MultiSelect = false;
             this.lvImages.Name = "lvImages";
-            this.lvImages.Size = new System.Drawing.Size(570, 324);
+            this.lvImages.Size = new System.Drawing.Size(490, 284);
             this.lvImages.SmallImageList = this.ilIcons;
             this.lvImages.TabIndex = 2;
             this.lvImages.UseCompatibleStateImageBehavior = false;
@@ -391,17 +341,12 @@
             // chName
             // 
             this.chName.Text = "Name";
-            this.chName.Width = 171;
+            this.chName.Width = 115;
             // 
             // chType
             // 
             this.chType.Text = "Type";
-            this.chType.Width = 73;
-            // 
-            // chOffset
-            // 
-            this.chOffset.Text = "Offset";
-            this.chOffset.Width = 76;
+            this.chType.Width = 66;
             // 
             // chBlocks
             // 
@@ -411,7 +356,12 @@
             // chBytes
             // 
             this.chBytes.Text = "Bytes";
-            this.chBytes.Width = 114;
+            this.chBytes.Width = 85;
+            // 
+            // chExecAddr
+            // 
+            this.chExecAddr.Text = "Execute Address";
+            this.chExecAddr.Width = 93;
             // 
             // ilIcons
             // 
@@ -429,7 +379,7 @@
             this.tabBootloader.Location = new System.Drawing.Point(4, 22);
             this.tabBootloader.Name = "tabBootloader";
             this.tabBootloader.Padding = new System.Windows.Forms.Padding(3);
-            this.tabBootloader.Size = new System.Drawing.Size(576, 330);
+            this.tabBootloader.Size = new System.Drawing.Size(496, 290);
             this.tabBootloader.TabIndex = 1;
             this.tabBootloader.Text = "Bootloader";
             this.tabBootloader.UseVisualStyleBackColor = true;
@@ -462,7 +412,7 @@
             this.tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle());
             this.tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle());
             this.tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 20F));
-            this.tableLayoutPanel1.Size = new System.Drawing.Size(570, 324);
+            this.tableLayoutPanel1.Size = new System.Drawing.Size(490, 284);
             this.tableLayoutPanel1.TabIndex = 0;
             // 
             // lblWarning
@@ -585,11 +535,11 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(584, 381);
+            this.ClientSize = new System.Drawing.Size(504, 341);
             this.Controls.Add(this.tabControl);
             this.Controls.Add(this.toolStrip);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.MinimumSize = new System.Drawing.Size(600, 420);
+            this.MinimumSize = new System.Drawing.Size(520, 380);
             this.Name = "formMain";
             this.Text = "PandoraImager";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.formMain_FormClosing);
@@ -635,10 +585,9 @@
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator4;
         private System.Windows.Forms.ToolStripMenuItem cbImageUp;
         private System.Windows.Forms.ToolStripMenuItem cbImageDown;
-        private System.Windows.Forms.ToolStripMenuItem cbImageRename;
         private System.Windows.Forms.ToolStripMenuItem cbImageExport;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator5;
-        private System.Windows.Forms.ToolStripMenuItem tsmiImageChange;
+        private System.Windows.Forms.ToolStripMenuItem cbModify;
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;
         private System.Windows.Forms.Label lblExecAddr;
         private System.Windows.Forms.Label lblCLKQSDS;
@@ -656,13 +605,8 @@
         private System.Windows.Forms.ColumnHeader chID;
         private System.Windows.Forms.ColumnHeader chName;
         private System.Windows.Forms.ColumnHeader chType;
-        private System.Windows.Forms.ColumnHeader chOffset;
         private System.Windows.Forms.ColumnHeader chBlocks;
         private System.Windows.Forms.ColumnHeader chBytes;
-        private System.Windows.Forms.ToolStripMenuItem cbImageChExec;
-        private System.Windows.Forms.ToolStripMenuItem cbImageChSystem;
-        private System.Windows.Forms.ToolStripMenuItem cbImageChLogo;
-        private System.Windows.Forms.ToolStripMenuItem cbImageChData;
-        private System.Windows.Forms.ToolStripMenuItem cbImageChRofs;
+        private System.Windows.Forms.ColumnHeader chExecAddr;
     }
 }

@@ -55,6 +55,12 @@
     <Compile Include="formAbout.Designer.cs">
       <DependentUpon>formAbout.cs</DependentUpon>
     </Compile>
+    <Compile Include="formSegment.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="formSegment.Designer.cs">
+      <DependentUpon>formSegment.cs</DependentUpon>
+    </Compile>
     <Compile Include="formMain.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -65,6 +71,9 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="formAbout.resx">
       <DependentUpon>formAbout.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="formSegment.resx">
+      <DependentUpon>formSegment.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="formMain.resx">
       <DependentUpon>formMain.cs</DependentUpon>
@@ -121,6 +130,8 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="flash-icon.ico" />
+    <None Include="Resources\big_modify.png" />
+    <None Include="Resources\big_add.png" />
     <None Include="Resources\warning.png" />
     <None Include="Resources\rename.png" />
     <None Include="Resources\down.png" />

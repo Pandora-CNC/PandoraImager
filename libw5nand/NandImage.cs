@@ -4,12 +4,20 @@ using System.Linq;
 using System.Text;
 using System.IO;
 
-namespace libnvtnand
+namespace libw5nand
 {
     public class NandImage
     {
         public BootHeader Header;
         public List<ImageEntry> Images;
+
+        public int ImageCount
+        {
+            get
+            {
+                return Images.Count;
+            }
+        }
 
         public const uint BytesPerBlock = 0x20000;
         public const uint NandSize = 0x800000;
@@ -20,123 +28,95 @@ namespace libnvtnand
             Images = new List<ImageEntry>();
         }
 
-        public bool GetImage(ushort ID, out ImageEntry Entry)
-        {
-            if(!ImageExists(ID)) {
-                Entry = new ImageEntry();
-                return false;
-            }
-
-            for(int i = 0; i < Images.Count; i++) {
-                if(Images[i].ImageID == ID) {
-                    Entry = Images[i];
-                    return true;
-                }
-            }
-
-            Entry = new ImageEntry();
-            return false;
-        }
-
-        public bool AddImage(ImageEntry Entry)
-        {
-            if (ImageExists(Entry.ImageID))
-                return false;
-            if (!CheckValidEntry(Entry, true))
-                return false;
-
-            Images.Add(Entry);
-            return true;
-        }
-
         public uint CalculateUsage()
         {
-            if (Images == null)
-                Images = new List<ImageEntry>();
-
             uint size = 0;
-            for (int i = 0; i < Images.Count; i++)
+            foreach (ImageEntry image in Images)
             {
-                size += Images[i].FileSize;
+                if(image.Data != null)
+                    size += (uint)image.Data.Length;
             }
 
             return size;
         }
 
-        private bool CheckValidEntry(ImageEntry Entry, bool ToAdd)
+        public static ushort CalculateBlocks(int Bytes)
         {
-            if (Images == null)
-                Images = new List<ImageEntry>();
+            if (Bytes % NandImage.BytesPerBlock > 0)
+                return (ushort)(((Bytes - (Bytes % NandImage.BytesPerBlock))
+                    / NandImage.BytesPerBlock) + 1);
+            else
+                return (ushort)(Bytes / NandImage.BytesPerBlock);
+        }
 
-            if (Entry.ImageID == 0) {
-                if (Entry.ImageType != ImageType.System || Entry.StartBlock != 0 || Entry.EndBlock != 3)
-                    return false;
-            }
-
-            if (ToAdd && Entry.StartBlock >= Entry.EndBlock)
+        public static bool CheckEntry(ImageEntry Entry)
+        {
+            if (Entry.Data == null)
                 return false;
-            if (Entry.FileSize <= 0)
+            if (Entry.Data.Length == 0)
+                return false;
+            if (Entry.Name.Length >= 0x30)
+                return false;
+            
+            return true;
+        }
+
+        public bool CheckAddEntry(ImageEntry Entry)
+        {
+            if (Images.Count == 0 && Entry.Data.Length > NandSize / 2)
+                return false;
+            if (CalculateUsage() + Entry.Data.Length > NandSize)
                 return false;
 
-            if (ToAdd)
-            {
-                foreach (ImageEntry image in Images)
-                {
-                    if (Entry.StartBlock >= image.StartBlock && Entry.EndBlock <= image.EndBlock)
-                        return false;
-                }
-            }
+            return NandImage.CheckEntry(Entry);
+        }
 
-            if (ToAdd && CalculateUsage() + Entry.FileSize > NandSize)
+        public bool ReplaceImage(int ID, ImageEntry NewEntry)
+        {
+            if (Images.Count <= ID || ID <= 0)
                 return false;
+            Images[ID] = NewEntry;
 
             return true;
         }
 
-        private bool HasValidNandLoader()
+        public bool SwapImages(int ID1, int ID2)
         {
-            ImageEntry nandLoader;
-            if (!GetImage(0, out nandLoader))
+            if (Images.Count <= ID1 || Images.Count <= ID2 || ID1 <= 0 || ID2 <= 0)
                 return false;
-            if (!nandLoader.Name.ToLower().Contains("nandloader"))
-               return false;
+            
+            ImageEntry tmp;
+            tmp = Images[ID1];
+            Images[ID1] = Images[ID2];
+            Images[ID2] = tmp;
 
-            return CheckValidEntry(nandLoader, false);
+            return true;
         }
 
-        public void RemoveImage(ushort ID)
+        public bool MoveImageUp(int ID)
         {
-            if (ImageExists(ID))
-            {
-                for (int i = 0; i < Images.Count; i++)
-                {
-                    if (Images[i].ImageID == ID)
-                        Images.RemoveAt(i);
-                }
-            }
-        }
-
-        public bool ReplaceImage(ImageEntry Entry)
-        {
-            RemoveImage(Entry.ImageID);
-            return AddImage(Entry);
-        }
-
-        public bool ImageExists(ushort ID)
-        {
-            if (Images == null)
-            {
-                Images = new List<ImageEntry>();
+            if (Images.Count <= ID || ID - 1 <= 0)
                 return false;
-            }
 
-            foreach (ImageEntry image in Images)
-            {
-                if (image.ImageID == ID)
-                    return true;
-            }
+            ImageEntry tmp;
+            tmp = Images[ID];
+            Images[ID] = Images[ID - 1];
+            Images[ID - 1] = tmp;
 
-            return false;
+            return true;
+        }
+
+        public bool MoveImageDown(int ID)
+        {
+            if (Images.Count <= ID + 1 || ID <= 0)
+                return false;
+
+            ImageEntry tmp;
+            tmp = Images[ID];
+            Images[ID] = Images[ID + 1];
+            Images[ID + 1] = tmp;
+
+            return true;
         }
 
         public static bool FormatImage(Stream ImageStream)
@@ -151,7 +131,7 @@ namespace libnvtnand
 
                 // Now format the NAND image
                 for (int i = 0; i < NandSize; i++)
-                    ImageStream.WriteByte(0xFF);
+                    ImageStream.WriteByte((byte)0xFF);
 
                 // And seek back
                 ImageStream.Seek(0, SeekOrigin.Begin);
@@ -170,8 +150,6 @@ namespace libnvtnand
                 return false;
             if (Images.Count == 0)
                 return false;
-            if (!HasValidNandLoader())
-                return false;
 
             try
             {
@@ -183,17 +161,17 @@ namespace libnvtnand
                 for (int block = 0; block < 4; block++)
                 {
                     writer.BaseStream.Seek(0x20000 * block, SeekOrigin.Begin);
-                    if (!WriteHeader(writer, Header))
+                    if (!WriteBootHeader(writer, Header))
                         return false;
                 }
 
                 // When writing the bootloader, there is a copy at 0x1f000, 0x3f000, 0x5f000
                 // and at 0x7f000
                 // Copy the headers and data over
-                for (int block = 0; block < 4; block++)
+                for (int copyIter = 0; copyIter < 4; copyIter++)
                 {
                     // Seek to the end page of the block
-                    writer.BaseStream.Seek((0x10000 + (0x20000 * block)) | 0xf000, SeekOrigin.Begin);
+                    writer.BaseStream.Seek((0x10000 + (0x20000 * copyIter)) | 0xf000, SeekOrigin.Begin);
 
                     // Write the preamble
                     // First, seek to the last page of the block
@@ -214,24 +192,51 @@ namespace libnvtnand
                     }
 
                     // Write all the images
+                    ushort block = 0;
                     for (ushort imageID = 0; imageID < Images.Count; imageID++)
                     {
                         // Retrieve the image
-                        ImageEntry img;
-                        if (!GetImage(imageID, out img))
+                        ImageEntry img = Images[imageID];
+                        ImageHeader head = new ImageHeader();
+                        ushort numBlocks;
+
+                        if (!CheckEntry(img))
                             return false;
 
+                        // Calculate the blocks
+                        if (imageID == 0)
+                            numBlocks = 3;
+                        else
+                            numBlocks = CalculateBlocks(img.Data.Length);
+
+                        // Construct the header
+                        head.ImageID = imageID;
+                        head.ImageName = img.Name;
+                        head.ImageType = img.Type;
+                        head.StartBlock = block;
+                        head.EndBlock = (ushort)(head.StartBlock + numBlocks);
+                        head.ExecuteAddress = img.ExecAddr;
+                        head.FileSize = (uint)img.Data.Length;
+
                         // Write the header
-                        if (!WriteEntryHeader(writer, img))
+                        if (!WriteEntryHeader(writer, head))
                             return false;
 
                         // On the first write of every image, write the data
-                        if (block == 0 || imageID == 0)
+                        // For id 0, write it every time to a new location
+                        if (copyIter == 0 || imageID == 0)
                         {
-                            if (!WriteEntryData(writer, img,
-                                (imageID == 0) ? (uint)((block * BytesPerBlock) + 0x20) : 0))
+                            uint offset;
+                            if (imageID == 0)
+                                offset = (uint)((copyIter * BytesPerBlock) + 0x20);
+                            else
+                                offset = (uint)(block * BytesPerBlock);
+
+                            if (!WriteEntryData(writer, img, offset))
                                 return false;
                         }
+
+                        block += numBlocks;
                     }
                 }
             }
@@ -241,11 +246,6 @@ namespace libnvtnand
             }
 
             return true;
-        }
-
-        public void Reorder()
-        {
-            Images = Images.OrderBy(o => o.ImageID).ToList();
         }
 
         public bool ReadImage(Stream ImageStream)
@@ -266,7 +266,7 @@ namespace libnvtnand
             // Seek to the beginning of the file / memorystream for our header block
             // When writing, there is a copy of the entire NandLoader at 0x20000, 0x40000 and 0x60000
             reader.BaseStream.Seek(0x00000, SeekOrigin.Begin);
-            if (!ReadHeader(reader, out Header))
+            if (!ReadBootHeader(reader, out Header))
                 return false;
 
             // Now seek to block 0 of the last nand page - 1
@@ -291,19 +291,27 @@ namespace libnvtnand
             }
 
             // Now we can read the image structs
-            for (int entry = 0; entry < numImages; entry++)
+            for (int image = 0; image < numImages; image++)
             {
-                ImageEntry ent;
-                if (!ReadEntry(reader, out ent))
+                ImageHeader head;
+                if (!ReadEntryHeader(reader, out head))
                     return false;
 
-                Images.Add(ent);
+                ImageEntry entry = new ImageEntry(head.ImageName, head.ImageType,
+                    head.ExecuteAddress);
+                if (!ReadEntryData(reader, head, out entry.Data))
+                    return false;
+
+                if (!CheckAddEntry(entry))
+                    return false;
+
+                Images.Add(entry);
             }
 
             return true;
         }
 
-        private bool WriteHeader(BinaryWriter Writer, BootHeader Header)
+        private bool WriteBootHeader(BinaryWriter Writer, BootHeader Header)
         {
             if (Writer == null)
                 return false;
@@ -327,24 +335,24 @@ namespace libnvtnand
             return true;
         }
 
-        private bool WriteEntryHeader(BinaryWriter Writer, ImageEntry Entry)
+        private bool WriteEntryHeader(BinaryWriter Writer, ImageHeader Header)
         {
             if (Writer == null)
                 return false;
 
             // Check if the entry is valid before writing the data
-            if (!CheckValidEntry(Entry, false))
+            if (!CheckEntryHeader(Header))
                 return false;
 
             try
             {
-                Writer.Write(Entry.ImageID);
-                Writer.Write((ushort)Entry.ImageType);
-                Writer.Write(Entry.StartBlock);
-                Writer.Write(Entry.EndBlock);
-                Writer.Write(Entry.ExecuteAddress);
-                Writer.Write(Entry.FileSize);
-                if (!Utils.WriteNCString(Writer, Entry.Name, 0x20))
+                Writer.Write(Header.ImageID);
+                Writer.Write((ushort)Header.ImageType);
+                Writer.Write(Header.StartBlock);
+                Writer.Write(Header.EndBlock);
+                Writer.Write(Header.ExecuteAddress);
+                Writer.Write(Header.FileSize);
+                if (!Utils.WriteNCString(Writer, Header.ImageName, 0x20))
                     return false;
             }
             catch (Exception)
@@ -355,13 +363,13 @@ namespace libnvtnand
             return true;
         }
 
-        private bool WriteEntryData(BinaryWriter Writer, ImageEntry Entry, uint DataOffset = 0x0)
+        private bool WriteEntryData(BinaryWriter Writer, ImageEntry Entry, uint DataOffset)
         {
             if (Writer == null)
                 return false;
 
             // Check if the entry is valid before writing the data
-            if (!CheckValidEntry(Entry, false))
+            if (!CheckEntry(Entry))
                 return false;
 
             try
@@ -369,8 +377,7 @@ namespace libnvtnand
                 long oldPos = Writer.BaseStream.Position;
 
                 // Seek to the start of data
-                Writer.BaseStream.Seek(Entry.StartBlock * BytesPerBlock + DataOffset,
-                    SeekOrigin.Begin);
+                Writer.BaseStream.Seek(DataOffset, SeekOrigin.Begin);
                 // Write all the data
                 Writer.Write(Entry.Data);
 
@@ -384,7 +391,7 @@ namespace libnvtnand
             return true;
         }
 
-        private bool ReadHeader(BinaryReader Reader, out BootHeader Header)
+        private bool ReadBootHeader(BinaryReader Reader, out BootHeader Header)
         {
             Header = new BootHeader();
 
@@ -414,48 +421,64 @@ namespace libnvtnand
             return true;
         }
 
-        private bool ReadEntry(BinaryReader Reader, out ImageEntry Entry)
+        private bool ReadEntryHeader(BinaryReader Reader, out ImageHeader Header)
         {
-            Entry = new ImageEntry();
+            Header = new ImageHeader();
 
             if (Reader == null)
                 return false;
 
             try
             {
-                Entry.ImageID = Reader.ReadUInt16();
-                Entry.ImageType = (ImageType)Reader.ReadUInt16();
-                Entry.StartBlock = Reader.ReadUInt16();
-                Entry.EndBlock = Reader.ReadUInt16();
-                Entry.ExecuteAddress = Reader.ReadUInt32();
-                Entry.FileSize = Reader.ReadUInt32();
-                Entry.Name = Utils.ReadNCString(Reader, 0x20);
+                Header.ImageID = Reader.ReadUInt16();
+                Header.ImageType = (ImageType)Reader.ReadUInt16();
+                Header.StartBlock = Reader.ReadUInt16();
+                Header.EndBlock = Reader.ReadUInt16();
+                Header.ExecuteAddress = Reader.ReadUInt32();
+                Header.FileSize = Reader.ReadUInt32();
+                Header.ImageName = Utils.ReadNCString(Reader, 0x20);
 
-                if (Entry.Name == null)
-                    return false;
+                return CheckEntryHeader(Header);
             }
             catch (Exception)
             {
                 return false;
             }
+        }
 
-            // Check if the entry is valid before reading the data
-            if (!CheckValidEntry(Entry, true))
+        private bool CheckEntryHeader(ImageHeader Header)
+        {
+            if (Header.EndBlock <= Header.StartBlock || Header.FileSize == 0
+                || (Header.ImageID == 0
+                && (Header.ImageType != ImageType.System || Header.StartBlock != 0
+                || Header.EndBlock != 3))
+                || Header.ImageName == null)
                 return false;
+            if (Header.ImageName.Length >= 0x20)
+                return false;
+            return true;
+        }
 
+        private bool ReadEntryData(BinaryReader Reader, ImageHeader Header, out byte[] Data)
+        {
+            Data = null;
+
+            if (!CheckEntryHeader(Header))
+                return false;
+  
             try
             {
                 long oldPosition = Reader.BaseStream.Position;
 
                 // Check for nand loader
                 // If we have got a NAND Loader entry, copy 1/2 a block (0x10000 bytes)
-                if (Entry.ImageID == 0) // NAND Loader, start from 0x20
+                if (Header.ImageID == 0) // NAND Loader, start from 0x20
                     Reader.BaseStream.Seek(0x20, SeekOrigin.Begin);
                 else // Seek to the normal data
-                    Reader.BaseStream.Seek(Entry.StartBlock * BytesPerBlock, SeekOrigin.Begin);
-                    
+                    Reader.BaseStream.Seek(Header.StartBlock * BytesPerBlock, SeekOrigin.Begin);
+
                 // Now copy the entire image
-                Entry.Data = Reader.ReadBytes((int)((Entry.ImageID == 0) ? (Entry.FileSize - 0x20) : Entry.FileSize));
+                Data = Reader.ReadBytes((int)((Header.ImageID == 0) ? (Header.FileSize - 0x20) : Header.FileSize));
 
                 Reader.BaseStream.Position = oldPosition;
             }
