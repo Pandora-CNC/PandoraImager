@@ -233,7 +233,8 @@ namespace libnvtnand
                         // On the first write of every image, write the data
                         if (block == 0 || imageID == 0)
                         {
-                            if (!WriteEntryData(writer, img, (imageID == 0) ? (uint)0x20 : 0))
+                            if (!WriteEntryData(writer, img,
+                                (imageID == 0) ? (uint)((block * BytesPerBlock) + 0x20) : 0))
                                 return false;
                         }
                     }
