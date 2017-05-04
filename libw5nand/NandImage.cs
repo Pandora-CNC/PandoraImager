@@ -218,6 +218,10 @@ namespace libw5nand
                         head.ExecuteAddress = img.ExecAddr;
                         head.FileSize = (uint)img.Data.Length;
 
+                        // On the bootloader image, adjust the size
+                        if (imageID == 0)
+                            head.FileSize += 0x20;
+
                         // Write the header
                         if (!WriteEntryHeader(writer, head))
                             return false;
@@ -478,7 +482,8 @@ namespace libw5nand
                     Reader.BaseStream.Seek(Header.StartBlock * BytesPerBlock, SeekOrigin.Begin);
 
                 // Now copy the entire image
-                Data = Reader.ReadBytes((int)((Header.ImageID == 0) ? (Header.FileSize - 0x20) : Header.FileSize));
+                Data = Reader.ReadBytes((int)((Header.ImageID == 0) ? (Header.FileSize - 0x20)
+                    : Header.FileSize));
 
                 Reader.BaseStream.Position = oldPosition;
             }
