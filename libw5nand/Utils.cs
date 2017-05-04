@@ -8,6 +8,27 @@ namespace libnvtnand
 {
     public static class Utils
     {
+        public static bool WriteNCString(BinaryWriter Writer, string String, int Size)
+        {
+            try
+            {
+                if (String.Length + 1 > Size)
+                    String = String.Substring(0, Size - 1);
+
+                byte[] strbytes = Encoding.ASCII.GetBytes(String);
+                Writer.Write(strbytes);
+
+                for (int i = 0; i < (Size - strbytes.Length); i++)
+                    Writer.Write(0x00);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         public static string ReadNCString(BinaryReader Reader, int Size)
         {
             long startPos = Reader.BaseStream.Position;

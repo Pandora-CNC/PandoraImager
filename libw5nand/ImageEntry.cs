@@ -15,5 +15,18 @@ namespace libnvtnand
         public uint FileSize;
         public string Name; // Up to 31 chars
         public byte[] Data;
+
+        public ImageEntry(ushort ImageID, ImageType ImageType, ushort StartBlock, ushort EndBlock,
+            uint ExecuteAddress, uint FileSize, string Name)
+        {
+            this.ImageID = ImageID;
+            this.ImageType = ImageType;
+            this.StartBlock = StartBlock;
+            this.EndBlock = EndBlock;
+            this.ExecuteAddress = ExecuteAddress;
+            this.FileSize = FileSize;
+            this.Name = Name;
+            this.Data = null;
+        }
     }
 }

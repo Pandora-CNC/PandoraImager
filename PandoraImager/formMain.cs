@@ -29,6 +29,11 @@ namespace PandoraImager
             SetNoFileLoaded();
         }
 
+        private void cbQuit_Click(object sender, EventArgs e)
+        {
+            this.Close();
+        }
+
         private void cbAbout_Click(object sender, EventArgs e)
         {
             new formAbout().ShowDialog();
@@ -36,66 +41,241 @@ namespace PandoraImager
 
         private void cbLoad_Click(object sender, EventArgs e)
         {
-            if(imageModified) {
+            if (imageModified)
+            {
                 DialogResult result;
-                if((result = MessageBox.Show("Your last changes are not saved!\nDo you want to save them now or cancel opening?",
-                    "Unsaved changes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question)) == System.Windows.Forms.DialogResult.Cancel)
+                if ((result = MessageBox.Show("Your last changes are not saved!\n" +
+                    "Do you want to save them now or cancel opening?",
+                    "Unsaved changes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question))
+                    == System.Windows.Forms.DialogResult.Cancel)
                     return;
-                else if(result == System.Windows.Forms.DialogResult.Yes)
+                else if (result == System.Windows.Forms.DialogResult.Yes)
                     cbSave.PerformClick();
             }
 
             OpenFileDialog ofd = new OpenFileDialog();
             ofd.FileName = "";
-            ofd.Filter = "Image files|*.img|All files|*.*";
+            ofd.Filter = "NAND image files (*.img)|*.img|All files (*.*)|*.*";
             ofd.FilterIndex = 0;
+            ofd.Multiselect = false;
             ofd.Title = "Select NAND image to open";
             ofd.CheckFileExists = true;
 
-            if (ofd.ShowDialog() == DialogResult.OK)
+            if (ofd.ShowDialog() != DialogResult.OK)
+                return;
+
+            if (!File.Exists(ofd.FileName))
+            {
+                MessageBox.Show("File not found!", "An error occured!",
+                    MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                image = null;
+                stream = null;
+                SetNoFileLoaded();
+                return;
+            }
+
+            try
+            {
+                fileName = ofd.FileName;
+                stream = File.Open(fileName, FileMode.Open);
+                
+                stream.Seek(0, SeekOrigin.End);
+                if (stream.Position != NandImage.NandSize)
+                {
+                    MessageBox.Show("Image file size missmatch!\n" +
+                        "Image file should be 0x800000 bytes large.",
+                        "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    stream.Close();
+                    image = null;
+                    stream = null;
+                    SetNoFileLoaded();
+                    return;
+                }
+                stream.Seek(0, SeekOrigin.Begin);
+
+                image = new NandImage();
+                if (!image.ReadImage(stream))
+                {
+                    MessageBox.Show("Parsing the image failed!\n" + 
+                        "Check whether you have provided a valid image.",
+                        "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    stream.Close();
+                    image = null;
+                    stream = null;
+                    SetNoFileLoaded();
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                ExceptionBox(ex);
+                image = null;
+                stream = null;
+                SetNoFileLoaded();
+                return;
+            }
+
+            SetFileLoaded();
+        }
+
+        private void cbNew_Click(object sender, EventArgs e)
+        {
+            if (imageModified)
+            {
+                DialogResult result;
+                if ((result = MessageBox.Show("Your last changes are not saved!\n" + 
+                    "Do you want to save them now or cancel opening?",
+                    "Unsaved changes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question))
+                    == System.Windows.Forms.DialogResult.Cancel)
+                    return;
+                else if (result == System.Windows.Forms.DialogResult.Yes)
+                    cbSave.PerformClick();
+            }
+
+            if (MessageBox.Show("Creating a completely new image is discouraged.\n" +
+                "Only proceed if you know what you are doing!\n" +
+                "Wrongfully created images will result in a bricked device!!!\n\n" +
+                "This process will require you to provide a working NANDLoader (aka. ROM).\n" +
+                "It is easier and recommended to start off an existing image.\n\n" +
+                "Do you really want to continue?", "Warning", MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) != DialogResult.Yes)
+                return;
+
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.FileName = "NANDLoader_192MHz.bin";
+            ofd.Multiselect = false;
+            ofd.Filter = "NANDLoader ROM images (*.bin)|*.bin|All files (*.*)|*.*";
+            ofd.FilterIndex = 0;
+            ofd.Title = "Select NANDLoader ROM";
+            ofd.CheckFileExists = true;
+
+            if (ofd.ShowDialog() != DialogResult.OK)
+                return;
+
+            try
             {
                 if (!File.Exists(ofd.FileName))
                 {
-                    MessageBox.Show("File not found!", "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    MessageBox.Show("File not found!", "An error occured!",
+                        MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                     image = null;
                     stream = null;
                     SetNoFileLoaded();
                     return;
                 }
 
-                try
-                {
-                    fileName = ofd.FileName;
-                    stream = File.Open(fileName, FileMode.Open);
-                    image = new NandImage();
-                    if (!image.ReadImage(stream))
-                    {
-                        MessageBox.Show("Parsing the image failed!\nCheck whether you have provided a valid image.",
-                            "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-                        stream.Close();
-                        image = null;
-                        stream = null;
-                        SetNoFileLoaded();
-                        return;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    ExceptionBox(ex);
+                FileStream romStream = File.OpenRead(ofd.FileName);
+                romStream.Seek(0, SeekOrigin.End);
+
+                if(romStream.Position > NandImage.BytesPerBlock / 2) {
+                    MessageBox.Show("The supplied NANDLoader ROM is too large!",
+                        "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    romStream.Close();
                     image = null;
                     stream = null;
                     SetNoFileLoaded();
                     return;
                 }
 
-                SetFileLoaded();
+                uint romSize = (uint)romStream.Position;
+                string romName = "NANDLoader";
+                if(Path.GetFileNameWithoutExtension(ofd.FileName).ToLower().Contains("nandloader"))
+                    romName = Path.GetFileNameWithoutExtension(ofd.FileName).Trim();
+                if(romName.Length > 19)
+                    romName = romName.Substring(0, 19);
+                romStream.Seek(0, SeekOrigin.Begin);
+                image = new NandImage();
+                ImageEntry nandLoader = new ImageEntry(0, ImageType.System, 0, 3, 0, romSize + 0x20,
+                    romName);
+                nandLoader.Data = new byte[romSize];
+                romStream.Read(nandLoader.Data, 0, (int)romSize);
+                romStream.Close();
+
+                if (!image.AddImage(nandLoader))
+                {
+                    MessageBox.Show("The supplied NANDLoader ROM invalid!",
+                        "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    image = null;
+                    stream = null;
+                    SetNoFileLoaded();
+                    return;
+                }
+
+                // Initalize the boot header
+                image.Header = new BootHeader();
+                image.Header.BootCodeMarker = 0x57425AA5;
+                image.Header.ExecuteAddress = 0x900000;
+                image.Header.ImageSize = romSize + 0x20;
+                image.Header.SkewMarker = 0xA55A4257;
+                image.Header.DQSODS = 0x00001010;
+                image.Header.CLKQSDS = 0x00888800;
+                image.Header.DramMarker = 0;
+                image.Header.DramSize = 0;
             }
+            catch (Exception ex)
+            {
+                ExceptionBox(ex);
+                image = null;
+                stream = null;
+                SetNoFileLoaded();
+                return;
+            }
+
+            SaveFileDialog sfd = new SaveFileDialog();
+            sfd.FileName = "";
+            sfd.Filter = "NAND image files (*.img)|*.img|All files (*.*)|*.*";
+            sfd.FilterIndex = 0;
+            sfd.Title = "Save NAND image as";
+            sfd.OverwritePrompt = true;
+
+            if (sfd.ShowDialog() != DialogResult.OK)
+            {
+                image = null;
+                stream = null;
+                SetNoFileLoaded();
+                return;
+            }
+
+            try
+            {
+                fileName = sfd.FileName;
+                stream = File.Open(fileName, FileMode.Create);
+
+                // Now format the NAND image
+                for (int i = 0; i < NandImage.NandSize; i++)
+                    stream.WriteByte(0xFF);
+
+                // Finally save the NAND over the image
+                stream.Seek(0, SeekOrigin.Begin);
+
+                if (!image.WriteImage(stream))
+                {
+                    MessageBox.Show("Couldn't save the new image!",
+                        "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    stream.Close();
+                    image = null;
+                    stream = null;
+                    SetNoFileLoaded();
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                ExceptionBox(ex);
+                image = null;
+                stream = null;
+                SetNoFileLoaded();
+                return;
+            }
+
+            SetFileLoaded();
         }
 
         private void ExceptionBox(Exception ex)
         {
-            MessageBox.Show(string.Format("Opening failed due to an error!\n\nMessage:\n{0}\n\nStack trace:\n{1}",
-                        ex.Message, ex.StackTrace), "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(string.Format("Opening failed due to an error!\n\nMessage:\n{0}\n\n" +
+                "Stack trace:\n{1}", ex.Message, ex.StackTrace), "An error occured!",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         private void SetNoFileLoaded()
@@ -125,17 +305,41 @@ namespace PandoraImager
                 tsddImage.Enabled = true;
                 if (lvImages.SelectedItems.Count == 1)
                 {
-                    if(ListToID.ContainsKey(lvImages.SelectedIndices[0]))
-                        cbImageRemove.Enabled = (ListToID[lvImages.SelectedIndices[0]] != 0);
-                    else
-                        cbImageRemove.Enabled = true;
+                    int index = lvImages.SelectedIndices[0];
 
-                    cbImageModify.Enabled = true;
+                    if (ListToID.ContainsKey(index))
+                    {
+                        cbImageAdd.Enabled = false;
+                        cbImageRemove.Enabled = (ListToID[index] != 0);
+                        cbImageRename.Enabled = (ListToID[index] != 0);
+                        cbImageImport.Enabled = true;
+                        cbImageExport.Enabled = true;
+                        tsmiImageChangeType.Enabled = (ListToID[index] != 0);
+                        cbImageUp.Enabled = (ListToID[index] != 0 && index > 0);
+                        cbImageDown.Enabled = (ListToID[index] != 0 && index + 1 < ListToID.Count);
+                    }
+                    else
+                    {
+                        cbImageAdd.Enabled = false;
+                        cbImageRemove.Enabled = false;
+                        cbImageRename.Enabled = false;
+                        cbImageImport.Enabled = false;
+                        cbImageExport.Enabled = false;
+                        tsmiImageChangeType.Enabled = false;
+                        cbImageUp.Enabled = false;
+                        cbImageDown.Enabled = false;
+                    }
                 }
                 else
                 {
-                    cbImageModify.Enabled = false;
+                    cbImageAdd.Enabled = true;
                     cbImageRemove.Enabled = false;
+                    cbImageRename.Enabled = false;
+                    cbImageImport.Enabled = false;
+                    cbImageExport.Enabled = false;
+                    tsmiImageChangeType.Enabled = false;
+                    cbImageUp.Enabled = false;
+                    cbImageDown.Enabled = false;
                 }
             }
             else
@@ -167,6 +371,21 @@ namespace PandoraImager
             }
         }
 
+        private void formMain_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (imageModified)
+            {
+                DialogResult result;
+                if ((result = MessageBox.Show("Your last changes are not saved!\n" +
+                    "Do you want to save them now or cancel opening?",
+                    "Unsaved changes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question))
+                    == System.Windows.Forms.DialogResult.Cancel)
+                    return;
+                else if (result == System.Windows.Forms.DialogResult.Yes)
+                    cbSave.PerformClick();
+            }
+        }
+
         private void tabControl_SelectedIndexChanged(object sender, EventArgs e)
         {
             RefreshMenus();
@@ -175,6 +394,15 @@ namespace PandoraImager
         private void lvImages_SelectedIndexChanged(object sender, EventArgs e)
         {
             RefreshMenus();
+        }
+
+        private void cbSave_Click(object sender, EventArgs e)
+        {
+            if (!image.WriteImage(stream))
+                MessageBox.Show("Error writing the image!",
+                        "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+            else
+                imageModified = false;
         }
     }
 }

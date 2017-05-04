@@ -8,10 +8,11 @@ namespace libnvtnand
 {
     public class NandImage
     {
-        BootHeader Header;
-        List<ImageEntry> Images;
+        public BootHeader Header;
+        private List<ImageEntry> Images;
 
-        const uint BytesPerBlock = 0x20000;
+        public const uint BytesPerBlock = 0x20000;
+        public const uint NandSize = 0x800000;
 
         public NandImage()
         {
@@ -46,14 +47,28 @@ namespace libnvtnand
         {
             if (ImageExists(Entry.ImageID))
                 return false;
-            if (!CheckValidEntry(Entry))
+            if (!CheckValidEntry(Entry, true))
                 return false;
 
             Images.Add(Entry);
             return true;
         }
 
-        private bool CheckValidEntry(ImageEntry Entry)
+        public uint CalculateUsage()
+        {
+            if (Images == null)
+                Images = new List<ImageEntry>();
+
+            uint size = 0;
+            for (int i = 0; i < Images.Count; i++)
+            {
+                size += Images[i].FileSize;
+            }
+
+            return size;
+        }
+
+        private bool CheckValidEntry(ImageEntry Entry, bool ToAdd)
         {
             if (Images == null)
                 Images = new List<ImageEntry>();
@@ -63,16 +78,22 @@ namespace libnvtnand
                     return false;
             }
 
-            if (Entry.StartBlock >= Entry.EndBlock)
+            if (ToAdd && Entry.StartBlock >= Entry.EndBlock)
                 return false;
             if (Entry.FileSize <= 0)
                 return false;
 
-            foreach (ImageEntry image in Images)
+            if (ToAdd)
             {
-                if (Entry.StartBlock >= image.StartBlock && Entry.EndBlock <= image.EndBlock)
-                    return false;
+                foreach (ImageEntry image in Images)
+                {
+                    if (Entry.StartBlock >= image.StartBlock && Entry.EndBlock <= image.EndBlock)
+                        return false;
+                }
             }
+
+            if (ToAdd && CalculateUsage() + Entry.FileSize > NandSize)
+                return false;
 
             return true;
         }
@@ -85,7 +106,7 @@ namespace libnvtnand
             if (!nandLoader.Name.ToLower().Contains("nandloader"))
                return false;
 
-            return CheckValidEntry(nandLoader);
+            return CheckValidEntry(nandLoader, false);
         }
 
         public void RemoveImage(ushort ID)
@@ -125,6 +146,42 @@ namespace libnvtnand
 
         public bool WriteImage(Stream ImageStream)
         {
+            if (Images == null)
+                return false;
+            if (Images.Count == 0)
+                return false;
+            if (!HasValidNandLoader())
+                return false;
+
+            BinaryWriter writer = new BinaryWriter(ImageStream);
+
+            // When writing, there is a copy of the entire NandLoader at
+            // 0x00000, 0x20000, 0x40000 and 0x60000
+            for (int block = 0; block < 4; block++)
+            {
+                writer.BaseStream.Seek(0x20000 * block, SeekOrigin.Begin);
+                if (!WriteHeader(writer, Header))
+                    return false;
+            }
+
+            ImageEntry nandLoader;
+            if (!GetImage(0, out nandLoader))
+                return false;
+
+            // When writing the bootloader, there is a copy at 0x3f000, 0x5f000 and at 0x7f000
+            for (int block = 0; block < 4; block++)
+            {
+                // Seek to the end page of the block
+                writer.BaseStream.Seek((0x10000 * block) | 0xf000, SeekOrigin.Begin);
+
+                // Write the block
+                // TODO: find out how the addresses work
+                WriteEntry(writer, nandLoader, true);
+            }
+
+            // TODO WRITE THE REST
+
+
             return true;
         }
 
@@ -180,6 +237,64 @@ namespace libnvtnand
             return true;
         }
 
+        private bool WriteHeader(BinaryWriter Writer, BootHeader Header)
+        {
+            try
+            {
+                Writer.Write(Header.BootCodeMarker);
+                Writer.Write(Header.ExecuteAddress);
+                Writer.Write(Header.ImageSize);
+                Writer.Write(Header.SkewMarker);
+                Writer.Write(Header.DQSODS);
+                Writer.Write(Header.CLKQSDS);
+                Writer.Write(Header.DramMarker);
+                Writer.Write(Header.DramSize);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool WriteEntry(BinaryWriter Writer, ImageEntry Entry, bool WriteData)
+        {
+            // Check if the entry is valid before writing the data
+            if (!CheckValidEntry(Entry, false))
+                return false;
+
+            try
+            {
+                Writer.Write(Entry.ImageID);
+                Writer.Write((ushort)Entry.ImageType);
+                Writer.Write(Entry.StartBlock);
+                Writer.Write(Entry.EndBlock);
+                Writer.Write(Entry.ExecuteAddress);
+                Writer.Write(Entry.FileSize);
+                if (!Utils.WriteNCString(Writer, Entry.Name, 32))
+                    return false;
+
+                if (WriteData)
+                {
+                    long oldPos = Writer.BaseStream.Position;
+
+                    // Seek to the start of data
+                    Writer.BaseStream.Seek(Entry.StartBlock * BytesPerBlock, SeekOrigin.Begin);
+                    // Write all the data
+                    Writer.Write(Entry.Data);
+
+                    Writer.BaseStream.Position = oldPos;
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         private bool ReadHeader(BinaryReader Reader, out BootHeader Header)
         {
             Header = new BootHeader();
@@ -199,6 +314,10 @@ namespace libnvtnand
             {
                 return false;
             }
+
+            // Magic check
+            if (Header.BootCodeMarker != 0x57425AA5)
+                return false;
 
             return true;
         }
@@ -226,7 +345,7 @@ namespace libnvtnand
             }
 
             // Check if the entry is valid before reading the data
-            if (!CheckValidEntry(Entry))
+            if (!CheckValidEntry(Entry, true))
                 return false;
 
             try
