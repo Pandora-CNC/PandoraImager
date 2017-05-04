@@ -19,7 +19,7 @@ namespace libnvtnand
                 Writer.Write(strbytes);
 
                 for (int i = 0; i < (Size - strbytes.Length); i++)
-                    Writer.Write(0x00);
+                    Writer.Write((byte)0x00);
             }
             catch (Exception)
             {

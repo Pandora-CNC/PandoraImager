@@ -144,49 +144,114 @@ namespace libnvtnand
             return false;
         }
 
+        public static bool FormatImage(Stream ImageStream)
+        {
+            if (ImageStream == null)
+                return false;
+
+            try
+            {
+                // Seek to the beginning of the stream
+                ImageStream.Seek(0, SeekOrigin.Begin);
+
+                // Now format the NAND image
+                for (int i = 0; i < NandSize; i++)
+                    ImageStream.WriteByte(0xFF);
+
+                // And seek back
+                ImageStream.Seek(0, SeekOrigin.Begin);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         public bool WriteImage(Stream ImageStream)
         {
-            if (Images == null)
+            if (Images == null || ImageStream == null)
                 return false;
             if (Images.Count == 0)
                 return false;
             if (!HasValidNandLoader())
                 return false;
 
-            BinaryWriter writer = new BinaryWriter(ImageStream);
-
-            // When writing, there is a copy of the entire NandLoader at
-            // 0x00000, 0x20000, 0x40000 and 0x60000
-            for (int block = 0; block < 4; block++)
+            try
             {
-                writer.BaseStream.Seek(0x20000 * block, SeekOrigin.Begin);
-                if (!WriteHeader(writer, Header))
-                    return false;
-            }
 
-            ImageEntry nandLoader;
-            if (!GetImage(0, out nandLoader))
+                BinaryWriter writer = new BinaryWriter(ImageStream);
+
+                // Write the boot header to various locations
+                // 0x00000, 0x20000, 0x40000 and 0x60000
+                for (int block = 0; block < 4; block++)
+                {
+                    writer.BaseStream.Seek(0x20000 * block, SeekOrigin.Begin);
+                    if (!WriteHeader(writer, Header))
+                        return false;
+                }
+
+                // When writing the bootloader, there is a copy at 0x1f000, 0x3f000, 0x5f000
+                // and at 0x7f000
+                // Copy the headers and data over
+                for (int block = 0; block < 4; block++)
+                {
+                    // Seek to the end page of the block
+                    writer.BaseStream.Seek((0x10000 + (0x20000 * block)) | 0xf000, SeekOrigin.Begin);
+
+                    // Write the preamble
+                    // First, seek to the last page of the block
+                    try
+                    {
+                        // Now write the magic
+                        writer.Write((uint)0x574255aa);
+                        // Then write the number of images
+                        writer.Write((uint)Images.Count);
+                        // Now skip one 32 bit word
+                        writer.BaseStream.Seek(sizeof(uint), SeekOrigin.Current);
+                        // Finally write the last magic
+                        writer.Write((uint)0x57425963);
+                    }
+                    catch (Exception)
+                    {
+                        return false;
+                    }
+
+                    // Write all the images
+                    for (ushort imageID = 0; imageID < Images.Count; imageID++)
+                    {
+                        // Retrieve the image
+                        ImageEntry img;
+                        if (!GetImage(imageID, out img))
+                            return false;
+
+                        // Write the header
+                        if (!WriteEntryHeader(writer, img))
+                            return false;
+
+                        // On the first write of every image, write the data
+                        if (block == 0 || imageID == 0)
+                        {
+                            if (!WriteEntryData(writer, img, (imageID == 0) ? (uint)0x20 : 0))
+                                return false;
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
                 return false;
-
-            // When writing the bootloader, there is a copy at 0x3f000, 0x5f000 and at 0x7f000
-            for (int block = 0; block < 4; block++)
-            {
-                // Seek to the end page of the block
-                writer.BaseStream.Seek((0x10000 * block) | 0xf000, SeekOrigin.Begin);
-
-                // Write the block
-                // TODO: find out how the addresses work
-                WriteEntry(writer, nandLoader, true);
             }
-
-            // TODO WRITE THE REST
-
 
             return true;
         }
 
         public bool ReadImage(Stream ImageStream)
         {
+            if (ImageStream == null)
+                return false;
+
             BinaryReader reader = new BinaryReader(ImageStream);
             uint numImages = 0;
 
@@ -239,6 +304,9 @@ namespace libnvtnand
 
         private bool WriteHeader(BinaryWriter Writer, BootHeader Header)
         {
+            if (Writer == null)
+                return false;
+
             try
             {
                 Writer.Write(Header.BootCodeMarker);
@@ -258,8 +326,11 @@ namespace libnvtnand
             return true;
         }
 
-        private bool WriteEntry(BinaryWriter Writer, ImageEntry Entry, bool WriteData)
+        private bool WriteEntryHeader(BinaryWriter Writer, ImageEntry Entry)
         {
+            if (Writer == null)
+                return false;
+
             // Check if the entry is valid before writing the data
             if (!CheckValidEntry(Entry, false))
                 return false;
@@ -272,20 +343,37 @@ namespace libnvtnand
                 Writer.Write(Entry.EndBlock);
                 Writer.Write(Entry.ExecuteAddress);
                 Writer.Write(Entry.FileSize);
-                if (!Utils.WriteNCString(Writer, Entry.Name, 32))
+                if (!Utils.WriteNCString(Writer, Entry.Name, 0x20))
                     return false;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
 
-                if (WriteData)
-                {
-                    long oldPos = Writer.BaseStream.Position;
+            return true;
+        }
 
-                    // Seek to the start of data
-                    Writer.BaseStream.Seek(Entry.StartBlock * BytesPerBlock, SeekOrigin.Begin);
-                    // Write all the data
-                    Writer.Write(Entry.Data);
+        private bool WriteEntryData(BinaryWriter Writer, ImageEntry Entry, uint DataOffset = 0x0)
+        {
+            if (Writer == null)
+                return false;
 
-                    Writer.BaseStream.Position = oldPos;
-                }
+            // Check if the entry is valid before writing the data
+            if (!CheckValidEntry(Entry, false))
+                return false;
+
+            try
+            {
+                long oldPos = Writer.BaseStream.Position;
+
+                // Seek to the start of data
+                Writer.BaseStream.Seek(Entry.StartBlock * BytesPerBlock + DataOffset,
+                    SeekOrigin.Begin);
+                // Write all the data
+                Writer.Write(Entry.Data);
+
+                Writer.BaseStream.Position = oldPos;
             }
             catch (Exception)
             {
@@ -298,6 +386,9 @@ namespace libnvtnand
         private bool ReadHeader(BinaryReader Reader, out BootHeader Header)
         {
             Header = new BootHeader();
+
+            if (Reader == null)
+                return false;
 
             try
             {
@@ -326,6 +417,9 @@ namespace libnvtnand
         {
             Entry = new ImageEntry();
 
+            if (Reader == null)
+                return false;
+
             try
             {
                 Entry.ImageID = Reader.ReadUInt16();
@@ -334,7 +428,7 @@ namespace libnvtnand
                 Entry.EndBlock = Reader.ReadUInt16();
                 Entry.ExecuteAddress = Reader.ReadUInt32();
                 Entry.FileSize = Reader.ReadUInt32();
-                Entry.Name = Utils.ReadNCString(Reader, 32);
+                Entry.Name = Utils.ReadNCString(Reader, 0x20);
 
                 if (Entry.Name == null)
                     return false;

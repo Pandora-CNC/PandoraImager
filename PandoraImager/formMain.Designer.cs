@@ -216,11 +216,11 @@
             // 
             // cbSaveAs
             // 
-            this.cbSaveAs.Enabled = false;
             this.cbSaveAs.Image = global::PandoraImager.Properties.Resources.save_as;
             this.cbSaveAs.Name = "cbSaveAs";
             this.cbSaveAs.Size = new System.Drawing.Size(152, 22);
             this.cbSaveAs.Text = "Save &as";
+            this.cbSaveAs.Click += new System.EventHandler(this.cbSaveAs_Click);
             // 
             // tsddUtility
             // 

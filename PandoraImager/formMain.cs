@@ -115,6 +115,7 @@ namespace PandoraImager
                 return;
             }
 
+            imageModified = false;
             SetFileLoaded();
         }
 
@@ -181,8 +182,8 @@ namespace PandoraImager
                 string romName = "NANDLoader";
                 if(Path.GetFileNameWithoutExtension(ofd.FileName).ToLower().Contains("nandloader"))
                     romName = Path.GetFileNameWithoutExtension(ofd.FileName).Trim();
-                if(romName.Length > 19)
-                    romName = romName.Substring(0, 19);
+                if(romName.Length > 30)
+                    romName = romName.Substring(0, 30);
                 romStream.Seek(0, SeekOrigin.Begin);
                 image = new NandImage();
                 ImageEntry nandLoader = new ImageEntry(0, ImageType.System, 0, 3, 0, romSize + 0x20,
@@ -241,12 +242,16 @@ namespace PandoraImager
                 fileName = sfd.FileName;
                 stream = File.Open(fileName, FileMode.Create);
 
-                // Now format the NAND image
-                for (int i = 0; i < NandImage.NandSize; i++)
-                    stream.WriteByte(0xFF);
-
-                // Finally save the NAND over the image
-                stream.Seek(0, SeekOrigin.Begin);
+                if (!NandImage.FormatImage(stream))
+                {
+                    MessageBox.Show("Couldn't format the new image!",
+                        "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    stream.Close();
+                    image = null;
+                    stream = null;
+                    SetNoFileLoaded();
+                    return;
+                }
 
                 if (!image.WriteImage(stream))
                 {
@@ -268,6 +273,7 @@ namespace PandoraImager
                 return;
             }
 
+            imageModified = false;
             SetFileLoaded();
         }
 
@@ -371,6 +377,25 @@ namespace PandoraImager
             }
         }
 
+        private bool SaveTo(Stream stream)
+        {
+            if (!NandImage.FormatImage(stream))
+            {
+                MessageBox.Show("Couldn't format the image!",
+                    "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                return false;
+            }
+
+            if (!image.WriteImage(stream))
+            {
+                MessageBox.Show("Couldn't save the image!",
+                    "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                return false;
+            }
+
+            return true;   
+        }
+
         private void formMain_FormClosing(object sender, FormClosingEventArgs e)
         {
             if (imageModified)
@@ -398,11 +423,39 @@ namespace PandoraImager
 
         private void cbSave_Click(object sender, EventArgs e)
         {
-            if (!image.WriteImage(stream))
-                MessageBox.Show("Error writing the image!",
-                        "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-            else
+            if(SaveTo(stream))
                 imageModified = false;
+        }
+
+        private void cbSaveAs_Click(object sender, EventArgs e)
+        {
+            SaveFileDialog sfd = new SaveFileDialog();
+            sfd.FileName = "";
+            sfd.Filter = "NAND image files (*.img)|*.img|All files (*.*)|*.*";
+            sfd.FilterIndex = 0;
+            sfd.Title = "Save NAND image as";
+            sfd.OverwritePrompt = true;
+
+            if (sfd.ShowDialog() != DialogResult.OK)
+                return;
+
+            try
+            {
+                FileStream stream = File.Open(sfd.FileName, FileMode.Create);
+                bool success = SaveTo(stream);
+                stream.Close();
+
+                if (!success)
+                    return;
+            }
+            catch (Exception ex)
+            {
+                ExceptionBox(ex);
+                return;
+            }
+
+            MessageBox.Show("Image file successfully written!", "Success!",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
 }
