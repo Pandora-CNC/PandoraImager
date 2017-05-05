@@ -43,14 +43,11 @@ namespace PandoraImager
             }
 
             tbName.Text = Header.ImageName;
-            cbType.SelectedIndex = (int)Header.ImageType;
+            cbType.SelectedItem = Header.ImageType;
             ndExecAddr.Value = Header.ExecuteAddress;
 
-            if (OnlyName)
-            {
-                cbType.Enabled = false;
-                ndExecAddr.ReadOnly = true;
-            }
+            cbType.Enabled = !OnlyName;
+            ndExecAddr.Enabled = !OnlyName;
         }
 
         private void cbOK_Click(object sender, EventArgs e)
@@ -59,7 +56,7 @@ namespace PandoraImager
             head.ImageName = tbName.Text;
             if (!OnlyName)
             {
-                head.ImageType = (ImageType)cbType.SelectedIndex;
+                head.ImageType = (ImageType)cbType.SelectedItem;
                 head.ExecuteAddress = (uint)ndExecAddr.Value;
             }
             else

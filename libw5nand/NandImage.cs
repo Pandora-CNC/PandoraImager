@@ -73,7 +73,7 @@ namespace libw5nand
 
         public bool ReplaceImage(int ID, ImageEntry NewEntry)
         {
-            if (Images.Count <= ID || ID <= 0)
+            if (Images.Count <= ID || ID < 0)
                 return false;
             Images[ID] = NewEntry;
 

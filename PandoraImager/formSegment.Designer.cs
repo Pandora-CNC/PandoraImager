@@ -131,6 +131,7 @@
             // 
             // ndExecAddr
             // 
+            this.ndExecAddr.DecimalPlaces = 8;
             this.ndExecAddr.Dock = System.Windows.Forms.DockStyle.Fill;
             this.ndExecAddr.Hexadecimal = true;
             this.ndExecAddr.Location = new System.Drawing.Point(113, 56);

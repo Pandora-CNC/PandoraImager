@@ -200,7 +200,6 @@
             this.cbModify.Name = "cbModify";
             this.cbModify.Size = new System.Drawing.Size(152, 22);
             this.cbModify.Text = "&Modify";
-            this.cbModify.Visible = false;
             this.cbModify.Click += new System.EventHandler(this.cbModify_Click);
             // 
             // toolStripSeparator5
@@ -214,7 +213,6 @@
             this.cbImageImport.Name = "cbImageImport";
             this.cbImageImport.Size = new System.Drawing.Size(152, 22);
             this.cbImageImport.Text = "Re&place data";
-            this.cbImageImport.Visible = false;
             this.cbImageImport.Click += new System.EventHandler(this.cbImageImport_Click);
             // 
             // cbImageExport
@@ -422,7 +420,7 @@
             this.lblWarning.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.lblWarning.Location = new System.Drawing.Point(119, 10);
             this.lblWarning.Name = "lblWarning";
-            this.lblWarning.Size = new System.Drawing.Size(448, 80);
+            this.lblWarning.Size = new System.Drawing.Size(368, 80);
             this.lblWarning.TabIndex = 10;
             this.lblWarning.Text = "Warning!\r\nTampering with these values could potentially led to an actual hard bri" +
                 "cked device!\r\n\r\nDO NOT CHANGE ANYTHING UNLESS YOU KNOW WHAT YOU ARE DOING!";
@@ -474,6 +472,9 @@
             // 
             // ndDRAMSize
             // 
+            this.ndDRAMSize.DecimalPlaces = 8;
+            this.ndDRAMSize.Dock = System.Windows.Forms.DockStyle.Left;
+            this.ndDRAMSize.Hexadecimal = true;
             this.ndDRAMSize.Location = new System.Drawing.Point(119, 186);
             this.ndDRAMSize.Maximum = new decimal(new int[] {
             -1,
@@ -486,6 +487,9 @@
             // 
             // ndExecAddr
             // 
+            this.ndExecAddr.DecimalPlaces = 8;
+            this.ndExecAddr.Dock = System.Windows.Forms.DockStyle.Left;
+            this.ndExecAddr.Hexadecimal = true;
             this.ndExecAddr.Location = new System.Drawing.Point(119, 108);
             this.ndExecAddr.Maximum = new decimal(new int[] {
             -1,
@@ -498,6 +502,9 @@
             // 
             // ndDQSODS
             // 
+            this.ndDQSODS.DecimalPlaces = 8;
+            this.ndDQSODS.Dock = System.Windows.Forms.DockStyle.Left;
+            this.ndDQSODS.Hexadecimal = true;
             this.ndDQSODS.Location = new System.Drawing.Point(119, 134);
             this.ndDQSODS.Maximum = new decimal(new int[] {
             -1,
@@ -510,6 +517,9 @@
             // 
             // ndCLKQSDS
             // 
+            this.ndCLKQSDS.DecimalPlaces = 8;
+            this.ndCLKQSDS.Dock = System.Windows.Forms.DockStyle.Left;
+            this.ndCLKQSDS.Hexadecimal = true;
             this.ndCLKQSDS.Location = new System.Drawing.Point(119, 160);
             this.ndCLKQSDS.Maximum = new decimal(new int[] {
             -1,

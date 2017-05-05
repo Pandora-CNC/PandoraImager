@@ -365,7 +365,8 @@ namespace PandoraImager
                 subItems[1] = imageId.ToString();
                 subItems[2] = entry.Name.ToString();
                 subItems[3] = entry.Type.ToString();
-                subItems[4] = NandImage.CalculateBlocks(entry.Data.Length).ToString();
+                subItems[4] = (imageId == 0) ? "3"
+                    : NandImage.CalculateBlocks(entry.Data.Length).ToString();
                 subItems[5] = string.Format("0x{0}", entry.Data.Length.ToString("X"));
                 subItems[6] = string.Format("0x{0}", entry.ExecAddr.ToString("X08"));
 
@@ -646,14 +647,151 @@ namespace PandoraImager
             }
         }
 
-        private void cbImageImport_Click(object sender, EventArgs e)
-        {
-
-        }
-
         private void cbModify_Click(object sender, EventArgs e)
         {
+            if (lvImages.SelectedItems.Count != 1)
+                return;
+            if (lvImages.SelectedIndices[0] >= image.ImageCount)
+                return;
 
+            try
+            {
+                int imageId = lvImages.SelectedIndices[0];
+                ImageEntry img = image.Images[imageId];
+
+                formSegment fseg = new formSegment(new ImageHeader()
+                { ImageName = img.Name, ImageType = img.Type,
+                    ExecuteAddress = img.ExecAddr }, true, imageId == 0);
+                if (fseg.ShowDialog() != DialogResult.OK)
+                    return;
+
+                img.Name = fseg.Header.ImageName;
+                if (imageId != 0)
+                {
+                    img.Type = fseg.Header.ImageType;
+                    img.ExecAddr = fseg.Header.ExecuteAddress;
+                }
+
+                image.Images[imageId] = img;
+                
+                imageModified = true;
+                RefreshImagesList();
+            }
+            catch (Exception ex)
+            {
+                ExceptionBox(ex);
+            }
+        }
+
+        private void cbImageImport_Click(object sender, EventArgs e)
+        {
+            if (lvImages.SelectedItems.Count != 1)
+                return;
+            if (lvImages.SelectedIndices[0] >= image.ImageCount)
+                return;
+
+            try
+            {
+                int imageId = lvImages.SelectedIndices[0];
+                ImageEntry img = image.Images[imageId];
+
+                OpenFileDialog ofd = new OpenFileDialog();
+                ofd.Multiselect = false;
+                ofd.FilterIndex = 0;
+                ofd.CheckFileExists = true;
+
+                if (imageId == 0)
+                {
+                    ofd.FileName = "NANDLoader_192MHz.bin";
+                    ofd.Filter = "NANDLoader ROM images (*.bin)|*.bin|All files (*.*)|*.*";
+                    ofd.Title = "Replace NANDLoader ROM";
+                }
+                else
+                {
+                    ofd.FileName = "";
+                    ofd.Filter = "Raw data files (*.bin)|*.bin|All files (*.*)|*.*";
+                    ofd.Title = "Replace data segment";
+                }
+
+                if (ofd.ShowDialog() != DialogResult.OK)
+                    return;
+
+                if (!File.Exists(ofd.FileName))
+                {
+                    MessageBox.Show("File not found!", "An error occured!",
+                        MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    return;
+                }
+
+                FileStream imgStream = File.OpenRead(ofd.FileName);
+                imgStream.Seek(0, SeekOrigin.End);
+
+                if (imageId == 0)
+                {
+                    if (imgStream.Position > NandImage.BytesPerBlock / 2)
+                    {
+                        MessageBox.Show("The supplied NANDLoader ROM is too large!",
+                            "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                        imgStream.Close();
+                        return;
+                    }
+                }
+                else
+                {
+                    if (imgStream.Position > (NandImage.NandSize - image.CalculateUsage()))
+                    {
+                        MessageBox.Show("The supplied data segment is too large!",
+                            "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                        imgStream.Close();
+                        return;
+                    }
+                }
+
+                uint imgSize = (uint)imgStream.Position;
+                string imgName = Path.GetFileNameWithoutExtension(ofd.FileName).Trim();
+                if (imgName.Length > 30)
+                    imgName = imgName.Substring(0, 30);
+                imgStream.Seek(0, SeekOrigin.Begin);
+                byte[] imgData = new byte[imgSize];
+                imgStream.Read(imgData, 0, (int)imgSize);
+                imgStream.Close();
+
+                formSegment fseg = new formSegment(new ImageHeader()
+                { ImageName = imgName, ImageType = img.Type, ExecuteAddress = img.ExecAddr },
+                true, imageId == 0);
+                if (fseg.ShowDialog() != DialogResult.OK)
+                    return;
+
+                img.Name = fseg.Header.ImageName;
+                img.Data = imgData;
+
+                if (imageId != 0)
+                {
+                    img.Type = fseg.Header.ImageType;
+                    img.ExecAddr = fseg.Header.ExecuteAddress;
+                }
+
+                if (!NandImage.CheckEntry(img))
+                {
+                    MessageBox.Show("The configured data segment is invalid!",
+                        "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    return;
+                }
+
+                if (!image.ReplaceImage(imageId, img))
+                {
+                    MessageBox.Show("Replacing the image entry failed!",
+                        "An error occured!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    return;
+                }
+
+                imageModified = true;
+                RefreshImagesList();
+            }
+            catch (Exception ex)
+            {
+                ExceptionBox(ex);
+            }
         }
     }
 }
